@@ -1,5 +1,6 @@
 const fs = require('fs');
 const readline = require('readline');
+const homedir = require('os').homedir();
 
 const bodyParser = require('body-parser');
 const express = require('express');
@@ -9,8 +10,8 @@ app.use(bodyParser.json());
 
 var {google} = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
-const credentials = JSON.parse(fs.readFileSync("client_secret.json"));
-const token = JSON.parse(fs.readFileSync("leo_secret.json"));
+const credentials = JSON.parse(fs.readFileSync(homedir + "/wurstwasser/client_secret.json"));
+const token = JSON.parse(fs.readFileSync(homedir + "/wurstwasser/leo_secret.json"));
 const service = google.youtube('v3');
 
 async function getOauthClient() {
@@ -96,7 +97,11 @@ app.post('/', async function (req, res) {
     } catch (err) {
         res.status(503).send("Some error occured, chanced are you exceeded your daily quota");
     }
-  });
+});
+
+app.get('/', (req, res) => {
+    res.send("How about a POST request instead?");
+});
   
   app.listen(app.get("port"), function () {
     console.log('Listening on port 61884');
