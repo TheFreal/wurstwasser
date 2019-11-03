@@ -1,7 +1,8 @@
-var fs = require('fs');
-var readline = require('readline');
+const fs = require('fs');
+const readline = require('readline');
 
-var express = require('express');
+const bodyParser = require('body-parser');
+const express = require('express');
 var app = express();
 app.set('port', (process.env.PORT || 61884))
 app.use(bodyParser.json());
@@ -89,8 +90,12 @@ app.post('/', async function (req, res) {
     if(!req.body.title || !req.body.artist){
         res.status(400).send("THe request was wither missing a track 'title', or 'artist' name");
     }
-    await addNewSong(req.body.artist, req.body.title);
-    res.sendStatus(200);
+    try {
+	await addNewSong(req.body.artist, req.body.title);
+    	res.sendStatus(200);
+    } catch (err) {
+        res.status(503).send("Some error occured, chanced are you exceeded your daily quota");
+    }
   });
   
   app.listen(app.get("port"), function () {
