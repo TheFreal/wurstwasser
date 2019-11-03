@@ -1,6 +1,11 @@
 var fs = require('fs');
 var readline = require('readline');
 
+var express = require('express');
+var app = express();
+app.set('port', (process.env.PORT || 61884))
+app.use(bodyParser.json());
+
 var {google} = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
 const credentials = JSON.parse(fs.readFileSync("client_secret.json"));
@@ -74,13 +79,21 @@ async function addWholeBacklog() {
     }
 }
 
-try {
-    addWholeBacklog();
-} catch (err) {
-    console.error("there has been an error");
-}
-
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+
+
+app.post('/', async function (req, res) {
+    if(!req.body.title || !req.body.artist){
+        res.status(400).send("THe request was wither missing a track 'title', or 'artist' name");
+    }
+    await addNewSong(req.body.artist, req.body.title);
+    res.sendStatus(200);
+  });
+  
+  app.listen(app.get("port"), function () {
+    console.log('Example app listening on port 61884!');
+  });
   
