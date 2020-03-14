@@ -1,18 +1,61 @@
 const fs = require('fs');
-const readline = require('readline');
-const homedir = require('os').homedir();
+const playlistConfig = require('./playlists.json');
 
+// set up server logic
 const bodyParser = require('body-parser');
 const express = require('express');
 var app = express();
 app.set('port', (process.env.PORT || 61884))
 app.use(bodyParser.json());
 
+// create the youtube api object with credentials
 var {google} = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
-const credentials = JSON.parse(fs.readFileSync(homedir + "/wurstwasser/client_secret.json"));
-const token = JSON.parse(fs.readFileSync(homedir + "/wurstwasser/leo_secret.json"));
+const credentials = require("./secrets/client_secret.json");
+const token = require("./secrets/leo_secret.json");
 const service = google.youtube('v3');
+
+// yreate the spotify api object with  credentials
+var SpotifyWebApi = require('spotify-web-api-node');
+const spotifyAuth = JSON.parse(fs.readFileSync("secrets/spotify_secrets.json"));
+var spotifyApi = new SpotifyWebApi(spotifyAuth);
+
+async function authorizeSpotify(){
+    const data = await spotifyApi.clientCredentialsGrant();
+    console.log('The access token expires in ' + data.body['expires_in']);
+    console.log('The access token is ' + data.body['access_token']);
+    spotifyApi.setAccessToken(data.body['access_token']);
+}
+
+async function getSpotifyPlaylist(playlistId, offsetParam){
+    await authorizeSpotify();
+    const fullPlaylist = [];
+    let nextPageExists = true;
+    let offset = (offsetParam == null ? 0 : offsetParam);
+    while(nextPageExists){
+        const response = await spotifyApi.getPlaylistTracks(playlistId, {
+            fields: 'items(added_at,track(name,artists)),next,tnotal',
+            offset: offset,
+        });
+        fullPlaylist.push(...response.body.items)
+        nextPageExists = (response.body.next !== null);
+        offset += 100;
+        if(nextPageExists){
+            console.log("Loading... " + fullPlaylist.length + "/" + response.body.total);
+        } else {
+            console.log("Finished loading all " + fullPlaylist.length + " songs");
+        }
+    }
+    return fullPlaylist;
+}
+
+async function convertSpotifyToYouTube(spotifyPlaylistId, youtubePlaylistId){
+    const playlist = await getSpotifyPlaylist(spotifyPlaylistId);
+    playlist.forEach(async (item) => {
+        const youtubeVideo = await findBestVideo(item.track.artists[0].name, item.track.name);
+        console.log("Found video for " + item.track.name + ": " + youtubeVideo);
+    });
+}
 
 async function getOauthClient() {
     var clientSecret = credentials.installed.client_secret;
@@ -27,7 +70,7 @@ async function findBestVideo(artist, title) {
     return new Promise(async (resolve, reject) => {
         service.search.list({
             auth:   await getOauthClient(),
-            part:   "snippet",
+            part:   "id",
             type:   "video",
             maxResults: 1,
             q:      artist + " " + title,
@@ -47,63 +90,88 @@ async function findBestVideo(artist, title) {
     });
 }
 
-async function addVideoToWurstwasser(video){
-    service.playlistItems.insert({
-        "auth": await getOauthClient(),
-        "part": "snippet",
-        "resource": {
-            "snippet": {
-                "playlistId": "PLeshathdNDmEDr_vy2l3mNE2176nt1QFd",
-                "resourceId": video.id
+async function getYoutubePlaylistSize(playlistId){
+    return new Promise(async (resolve, reject) => {
+        service.playlists.list({
+            "auth": await getOauthClient(),
+            "part": "contentDetails",
+            id: playlistId
+        }, (error, response) => {
+            if(error){
+                reject(error);
+            } else if (typeof response.data == undefined){
+                reject(Error("Playlist doesn't exist"))
             }
-        }
-    }, (err, res) => {
-        if(err){
-            throw err;
-        }
-        console.log("Added " + res.data.snippet.title + " to the playlist!");
-        return;
-    })
+            console.log("Already have " + response.data.items[0].contentDetails.itemCount + " items in YT list");
+            resolve(response.data.items[0].contentDetails.itemCount);
+        });
+    });
 }
 
-async function addNewSong(artist, title){
-    let video = await findBestVideo(artist, title);
-    await addVideoToWurstwasser(video);
-    return;
+async function updatePlaylist(playlistObj){
+    const preloaded = await getYoutubePlaylistSize(playlistObj.youtube);
+    const newSongs = await getSpotifyPlaylist(playlistObj.spotify, preloaded);
+    for (const item of newSongs) {
+        const youtubeVideo = await findBestVideo(item.track.artists[0].name, item.track.name);
+        console.log("Found video for " + item.track.name + ": " + youtubeVideo.id.videoId);
+        try{
+            await addVideoToPlaylist(youtubeVideo.id.videoId, playlistObj.youtube);
+        } catch(err) {
+            console.error(err);
+        }
+        
+    };
+    console.log("Added all new songs!");
 }
 
-async function addWholeBacklog() {
-    let backlog = JSON.parse(fs.readFileSync("fleischsaft_proxy.json"));
-    for (let i = 0; i < backlog.length; i++) {
-        const element = backlog[i];
-        addNewSong(element.artist, element.track);
-        await sleep(5000);
+async function addVideoToPlaylist(videoId, playlistId){
+    return new Promise(async (resolve, reject) => {
+        service.playlistItems.insert({
+            "auth": await getOauthClient(),
+            "part": "snippet",
+            "resource": {
+              "snippet": {
+                  "playlistId": playlistId,
+                  "resourceId": {
+                      "videoId": videoId,
+                      "kind": "youtube#video"
+                  }
+               }
+           }
+        }, (err, res) => {
+            if(err){
+               reject(err);
+            }
+            console.log("Added " + res.data.id + " to the playlist!");
+            resolve();
+        })
+    });
+}
+
+async function updateAll() {
+    for (const name in playlistConfig) {
+        updatePlaylist(playlistConfig[name]);
     }
+    return;
 }
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-
-app.post('/', async function (req, res) {
-    if(!req.body.title || !req.body.artist){
-        res.status(400).send("THe request was wither missing a track 'title', or 'artist' name");
-    }
-    try {
-	await addNewSong(req.body.artist, req.body.title);
-    	res.sendStatus(200);
-    } catch (err) {
-        res.status(503).send("Some error occured, chanced are you exceeded your daily quota");
-    }
-});
-
 app.get('/', (req, res) => {
     res.send("How about a POST request instead?");
 });
+
+const job = new CronJob('0 0 0 * * *', function() {
+    try {
+        await updateAll();
+     } catch (error) {
+         console.error(error);
+     }
+});
   
-  app.listen(app.get("port"), function () {
-    console.log('Listening on port 61884');
-  });
+app.listen(app.get("port"), async function () {
+    console.log("Listening on Port " + app.get("port"));
+});
   
