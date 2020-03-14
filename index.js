@@ -11,13 +11,13 @@ app.use(bodyParser.json());
 // create the youtube api object with credentials
 var {google} = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
-const credentials = (process.env.YOUTUBE_SECRET || require("./secrets/client_secret.json"));
-const token = (process.env.YOUTUBE_TOKEN || require("./secrets/leo_secret.json"));
+const credentials = (JSON.parse(process.env.YOUTUBE_SECRET) || require("./secrets/client_secret.json"));
+const token = (JSON.parse(process.env.YOUTUBE_TOKEN) || require("./secrets/leo_secret.json"));
 const service = google.youtube('v3');
 
 // yreate the spotify api object with  credentials
 var SpotifyWebApi = require('spotify-web-api-node');
-const spotifyAuth = (process.env.SPOTIFY_SECRET || require("./secrets/spotify_secrets.json"));
+const spotifyAuth = (JSON.parse(process.env.SPOTIFY_SECRET) || require("./secrets/spotify_secrets.json"));
 var spotifyApi = new SpotifyWebApi(spotifyAuth);
 
 async function authorizeSpotify(){
