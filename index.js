@@ -1,4 +1,4 @@
-const fs = require('fs');
+var CronJob = require('cron').CronJob;
 const playlistConfig = require('./playlists.json');
 
 // set up server logic
@@ -17,7 +17,7 @@ const service = google.youtube('v3');
 
 // yreate the spotify api object with  credentials
 var SpotifyWebApi = require('spotify-web-api-node');
-const spotifyAuth = JSON.parse(fs.readFileSync("secrets/spotify_secrets.json"));
+const spotifyAuth = require("./secrets/spotify_secrets.json");
 var spotifyApi = new SpotifyWebApi(spotifyAuth);
 
 async function authorizeSpotify(){
@@ -163,15 +163,15 @@ app.get('/', (req, res) => {
     res.send("How about a POST request instead?");
 });
 
-const job = new CronJob('0 0 0 * * *', function() {
+const job = new CronJob('0 0 0 * * *', async () => {
     try {
         await updateAll();
      } catch (error) {
          console.error(error);
      }
 });
+job.start();
   
 app.listen(app.get("port"), async function () {
     console.log("Listening on Port " + app.get("port"));
 });
-  
