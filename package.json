@@ -4,7 +4,8 @@
   "description": "Automatically syncs Fleischaft Songs to a public YouTube Playlist",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
   },
   "author": "Leo",
   "license": "ISC",
@@ -15,5 +16,6 @@
     "google-auth-library": "^5.5.1",
     "googleapis": "^44.0.0",
     "spotify-web-api-node": "^4.0.0"
-  }
+  },
+  "engines": {"node": "12.x"}
 }
