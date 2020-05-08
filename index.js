@@ -165,4 +165,11 @@ app.post('/', async (req, res) => {
 
 app.listen(app.get("port"), async function () {
     console.log("Listening on Port " + app.get("port"));
+    // run updateAll on every new commit
+    authorizeSpotify().then(async () => {
+        await updateAll();
+        console.log("Refreshed all successfully!");
+    }).catch(err => {
+        console.error(err);
+    })
 });
